@@ -84,33 +84,47 @@ class BetterNametags : Mod
 [HarmonyPatch(typeof(BillboardObject), "Update")]
 class HarmonyPatch_BillboardObject_Update
 {
-    [HarmonyPrefix]
+    [HarmonyPatch]
     internal static bool Prefix(BillboardObject __instance)
     {
         // Find private variables
         var traverse = Traverse.Create(__instance);
-        var hideDistanceFromCamera = traverse.Field<float>("hideDistanceFromCamera");
         var bilboardObject = traverse.Field<GameObject>("bilboardObject");
         var targetToLookAt = traverse.Field<Transform>("targetToLookAt");
 
-        if (__instance.transform == null || targetToLookAt.Value == null)
-            return true;
+        if (__instance.transform == null || targetToLookAt.Value == null || bilboardObject.Value == null)
+            return false;
 
-        // Override render distance
-        hideDistanceFromCamera.Value = BetterNametags.NametagMaxDistance;
+        float dist = Vector3.Distance(__instance.transform.position, targetToLookAt.Value.position);
 
-        if (bilboardObject.Value == null)
-            return true;
+        // Hide based on distance
+        if (BetterNametags.NametagMaxDistance > 0f)
+        {
+            if (dist >= BetterNametags.NametagMaxDistance)
+            {
+                if (bilboardObject.Value.activeInHierarchy)
+                {
+                    bilboardObject.Value.SetActive(false);
+                }
+                return false;
+            }
+            else if (!bilboardObject.Value.activeInHierarchy && dist < BetterNametags.NametagMaxDistance)
+            {
+                bilboardObject.Value.SetActive(true);
+            }
+        }
+
+        // Rotate towards target
+        __instance.transform.rotation = Quaternion.LookRotation(__instance.transform.position - targetToLookAt.Value.position, targetToLookAt.Value.up);
 
         // Make size on screen the same regardless of distance
-        float dist = Vector3.Distance(__instance.transform.position, targetToLookAt.Value.position);
         float distScale = 0.2f * BetterNametags.NametagSize;
         bilboardObject.Value.transform.localScale = Vector3.one * dist * distScale;
 
         // Show distance to target
         var textMesh = bilboardObject.Value.GetComponent<TextMesh>();
         if (textMesh == null)
-            return true;
+            return false;
 
         var newText = textMesh.text;
 
@@ -135,6 +149,6 @@ class HarmonyPatch_BillboardObject_Update
             textMesh.text = newText;
         }
 
-        return true;
+        return false;
     }
 }
